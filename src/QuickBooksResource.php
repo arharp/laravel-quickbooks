@@ -175,7 +175,7 @@ class QuickBooksResource
      */
     public function queryWhereIn($column, $values, $offset = null, $limit = null, $select = null)
     {
-        $query = "WHERE $column IN ('" . collect($array)->implode("','") . "')";
+        $query = "WHERE $column IN ('" . collect($values)->implode("','") . "')";
 
         return $this->query($query, $offset, $limit, $select);
     }
