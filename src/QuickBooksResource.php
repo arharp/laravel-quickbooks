@@ -3,6 +3,7 @@
 namespace LifeOnScreen\LaravelQuickBooks;
 
 use Illuminate\Database\Query\Builder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\App;
 use QuickBooksOnline\API\Core\HttpClients\FaultHandler;
 
@@ -93,7 +94,7 @@ class QuickBooksResource
     }
 
     /**
-     * Find a resource by ID
+     * Find a single resource by ID
      *
      * @param $id
      * @return \QuickBooksOnline\API\Data\IPPIntuitEntity
@@ -105,7 +106,7 @@ class QuickBooksResource
     }
 
     /**
-     * Find a resource by a key/value pair.
+     * Find a single resource by a key/value pair.
      *
      * @param $key
      * @param $value
@@ -114,27 +115,69 @@ class QuickBooksResource
      */
     public function findBy($key, $value)
     {
-        return $this->query([$key => $value], 0, 1)->first();
+        return $this->query(null, [$key => $value], 0, 1)->first();
     }
 
     /**
-     * Query the resources by the provided array of column/value pairs.
+     * Queries resources with the provided query string.
+     *
+     * @param string $query
+     * @param int $offset
+     * @param int $limit
+     * @param string $select The columns to select
+     * @return \Illuminate\Support\Collection
+     * @throws \Exception
+     */
+    public function query($query = null, $offset = null, $limit = null, $select = null)
+    {
+        if (is_null($select)) {
+            $select = '*';
+        }
+
+        $query = 'SELECT ' . $select . ' FROM ' . $this->getResourceName() . ' ' . $query;
+
+        $results = $this->request('Query', $query, $offset, $limit);
+
+        return collect($results ?: []);
+    }
+
+    /**
+     * Query resources by the provided array of column/value pairs.
      *
      * @param array $where
      * @param int $offset
      * @param int $limit
-     * @return \Illuminate\Support\Collection
+     * @param string $select
+     * @return Collection
      * @throws \Exception
      */
-    public function query($where = null, $offset = null, $limit = null)
+    public function queryWhere($where = null, $offset = null, $limit = null, $select = null)
     {
-        $query = 'SELECT * FROM ' . $this->getResourceName();
+        $query = '';
 
         if (is_array($where)) {
             $query .= $this->buildWhereString($where);
         }
 
-        return collect($this->request('Query', $query, $offset, $limit));
+        return $this->query($query, $offset, $limit, $select);
+    }
+
+    /**
+     * Query resources where the column contains one of the provided values.
+     *
+     * @param string $column
+     * @param array|Collection $values
+     * @param int $offset
+     * @param int $limit
+     * @param string $select
+     * @return Collection
+     * @throws \Exception
+     */
+    public function queryWhereIn($column, $values, $offset = null, $limit = null, $select = null)
+    {
+        $query = "WHERE $column IN ('" . collect($array)->implode("','") . "')";
+
+        return $this->query($query, $offset, $limit, $select);
     }
 
     /**
@@ -162,7 +205,7 @@ class QuickBooksResource
     /**
      * Make a request using the DataService.
      *
-     * @param       $method
+     * @param string $method
      * @param mixed ...$params
      * @return bool
      */
@@ -197,6 +240,11 @@ class QuickBooksResource
         return $this->name;
     }
 
+    /**
+     * Whether an error was encountered on the last request.
+     *
+     * @return bool
+     */
     public function hasError()
     {
         return isset($this->error);
@@ -237,7 +285,7 @@ class QuickBooksResource
      */
     protected function buildWhereString($attributes)
     {
-        $where  = ' WHERE ';
+        $where  = 'WHERE ';
 
         $where .= collect($attributes)->map(function ($value, $key) {
             return "$key = '" . addslashes($value) . "'";
